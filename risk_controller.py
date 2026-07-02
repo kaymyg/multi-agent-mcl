@@ -8,11 +8,18 @@ Computes cross-interaction control metrics and estimates root causes
 using Multivariate Gaussian likelihood matrices.
 
 Dependencies: numpy, scipy
+
+CHANGELOG (security patch):
+- FIX: `evaluate_bootstrap_gate` previously used the global `np.random`
+  state, making quarantine decisions non-reproducible run-to-run (a real
+  problem if this gate's behavior needs to be cited/verified for an RFC).
+  It now uses a dedicated `np.random.Generator` that can be seeded, while
+  still defaulting to nondeterministic behavior if no seed is given.
 """
 
 import numpy as np
 import scipy.stats as stats
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 
 
 class ProductionRiskAndAttributionController:
@@ -21,9 +28,18 @@ class ProductionRiskAndAttributionController:
     using Multivariate Gaussian likelihood matrices.
     """
 
-    def __init__(self, tau_quarantine: float = 0.55, num_bootstraps: int = 200):
+    def __init__(
+        self,
+        tau_quarantine: float = 0.55,
+        num_bootstraps: int = 200,
+        rng_seed: Optional[int] = None,
+    ):
         self.tau = tau_quarantine
         self.num_bootstraps = num_bootstraps
+        # Dedicated RNG instead of global np.random -> reproducible when
+        # seeded, isolated from any other code in the process that also
+        # touches np.random's global state.
+        self._rng = np.random.default_rng(rng_seed)
 
         # Base weights and interaction parameters for the Joint Risk Index
         self.w_base = {
@@ -88,12 +104,10 @@ class ProductionRiskAndAttributionController:
         jri_samples = np.array([self.compute_nonlinear_jri(m) for m in history])
         n = len(jri_samples)
 
-        bootstraps = []
-        for _ in range(self.num_bootstraps):
-            resample = np.random.choice(jri_samples, size=n, replace=True)
-            bootstraps.append(np.mean(resample))
+        resamples = self._rng.choice(jri_samples, size=(self.num_bootstraps, n), replace=True)
+        bootstraps = resamples.mean(axis=1)
 
-        p_breach = float(np.mean(np.array(bootstraps) > self.tau))
+        p_breach = float(np.mean(bootstraps > self.tau))
         return p_breach, p_breach > 0.95
 
     def diagnose_root_cause(self, metrics_vector: np.ndarray) -> Dict[str, Any]:
