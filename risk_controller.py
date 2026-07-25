@@ -1,20 +1,6 @@
 """
-risk_controller.py
-------------------
-Non-Linear Risk Controller & Probabilistic Attribution Engine for the
-Multi-Agent Meta-Cognitive Calibration Layer (MCL).
-
-Computes cross-interaction control metrics and estimates root causes
-using Multivariate Gaussian likelihood matrices.
-
+risk_controller.py — Non-Linear Risk Controller & Probabilistic Attribution Engine (MCL).
 Dependencies: numpy, scipy
-
-CHANGELOG (security patch):
-- FIX: `evaluate_bootstrap_gate` previously used the global `np.random`
-  state, making quarantine decisions non-reproducible run-to-run (a real
-  problem if this gate's behavior needs to be cited/verified for an RFC).
-  It now uses a dedicated `np.random.Generator` that can be seeded, while
-  still defaulting to nondeterministic behavior if no seed is given.
 """
 
 import numpy as np
@@ -23,11 +9,6 @@ from typing import Dict, Any, List, Tuple, Optional
 
 
 class ProductionRiskAndAttributionController:
-    """
-    Computes cross-interaction control metrics and estimates root causes
-    using Multivariate Gaussian likelihood matrices.
-    """
-
     def __init__(
         self,
         tau_quarantine: float = 0.55,
@@ -36,12 +17,8 @@ class ProductionRiskAndAttributionController:
     ):
         self.tau = tau_quarantine
         self.num_bootstraps = num_bootstraps
-        # Dedicated RNG instead of global np.random -> reproducible when
-        # seeded, isolated from any other code in the process that also
-        # touches np.random's global state.
         self._rng = np.random.default_rng(rng_seed)
 
-        # Base weights and interaction parameters for the Joint Risk Index
         self.w_base = {
             "drift": 0.20,
             "jsd": 0.20,
@@ -54,17 +31,21 @@ class ProductionRiskAndAttributionController:
             "collusion_x_jsd": 0.08
         }
 
-        # Failure profile definitions: [Mean Vector, Covariance Matrix]
-        # Parameter ordering: [drift, jsd, linguistic, collusion, activation]
         self.profiles = {
             "STRATEGIC_DECEPTIVE_COLLUSION": {
                 "mu": np.array([0.45, 0.55, 0.40, 0.75, 0.80]),
+                # FIX: these variances were ~10x tighter than the isotropic
+                # MEMORY_VECTOR_CORRUPTION profile (eye*0.04), so this profile's
+                # Gaussian PDF underflowed to ~0 for any slightly off-centre
+                # observation and the loose profile won essentially every input
+                # at "100%" confidence. Widened to a comparable scale so the
+                # two profiles actually compete on shape rather than spread.
                 "sigma": np.array([
-                    [0.02, 0.01, 0.00, 0.02, 0.02],
-                    [0.01, 0.02, 0.00, 0.01, 0.02],
-                    [0.00, 0.00, 0.03, 0.00, 0.00],
-                    [0.02, 0.01, 0.00, 0.04, 0.03],
-                    [0.02, 0.02, 0.00, 0.03, 0.04]
+                    [0.10, 0.04, 0.00, 0.06, 0.06],
+                    [0.04, 0.10, 0.00, 0.04, 0.06],
+                    [0.00, 0.00, 0.12, 0.00, 0.00],
+                    [0.06, 0.04, 0.00, 0.14, 0.08],
+                    [0.06, 0.06, 0.00, 0.08, 0.14]
                 ])
             },
             "MEMORY_VECTOR_CORRUPTION": {
@@ -75,12 +56,6 @@ class ProductionRiskAndAttributionController:
         self.prior = 1.0 / (len(self.profiles) + 1)
 
     def compute_nonlinear_jri(self, metrics: Dict[str, float]) -> float:
-        """
-        Computes the nonlinear Joint Risk Index (JRI) by combining base
-        metric weights with pairwise interaction terms.
-
-        JRI = Σₖ wₖMₖ + Σⱼₖ wⱼₖMⱼMₖ
-        """
         jri_base = sum(self.w_base[k] * metrics.get(k, 0.0) for k in self.w_base)
         jri_interaction = (
             self.w_inter["drift_x_activation"] * metrics.get("drift", 0.0) * metrics.get("activation", 0.0)
@@ -93,11 +68,6 @@ class ProductionRiskAndAttributionController:
         self,
         history: List[Dict[str, float]]
     ) -> Tuple[float, bool]:
-        """
-        Runs non-parametric bootstrap resampling over the JRI history.
-        Returns (p_breach, quarantine_triggered).
-        Quarantine triggered if P(JRI > τ) > 0.95.
-        """
         if len(history) < 5:
             return 0.0, False
 
@@ -111,10 +81,6 @@ class ProductionRiskAndAttributionController:
         return p_breach, p_breach > 0.95
 
     def diagnose_root_cause(self, metrics_vector: np.ndarray) -> Dict[str, Any]:
-        """
-        Assigns a causal failure profile using Bayesian Multivariate Gaussian
-        likelihood estimation with equal priors across profiles.
-        """
         posteriors = {}
         eps = 1e-12
         for cause, params in self.profiles.items():
