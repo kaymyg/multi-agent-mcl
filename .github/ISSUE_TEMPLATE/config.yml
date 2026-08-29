@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability (working, undisclosed evasion)
+    url: https://github.com/kaymyg/multi-agent-mcl/security/advisories/new
+    about: Please report working evasions privately — see SECURITY.md
