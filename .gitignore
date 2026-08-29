@@ -5,3 +5,6 @@ __pycache__/
 venv/
 *.egg-info/
 .mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
