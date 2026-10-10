@@ -4,6 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-20%20passing-brightgreen)](tests/)
 [![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen)](tests/)
+[![CodeQL](https://github.com/kaymyg/multi-agent-mcl/actions/workflows/codeql.yml/badge.svg)](https://github.com/kaymyg/multi-agent-mcl/actions/workflows/codeql.yml)
 
 **Classification:** Systems Architecture & Control Theory Blueprint
 **Target Environment:** Decoupled Autonomous Multi-Agent Infrastructures (LangGraph, AutoGen, vLLM Cluster Orchestrations)
