@@ -277,6 +277,8 @@ MIT — see [`LICENSE`](LICENSE).
 
 ## Contributing
 
+Looking for something to work on? See [HELP_WANTED.md](HELP_WANTED.md).
+
 Bug reports, new adversarial probes, and PRs are welcome — see
 [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup and what CI checks.
 
